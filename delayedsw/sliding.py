@@ -36,19 +36,6 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         self.split_by = split_by
         self.drop_nan = drop_nan
 
-    def __sklearn_tags__(self):
-        """Additional tags for sklearn compatibility."""
-        return {
-            'requires_fit': True,
-            'allow_nan': True,
-            'requires_columns': False,
-            'preserves_dtype': [],
-            '_xfail_checks': {
-                'check_estimators_dtypes',
-                'check_fit2d_predict1d',
-            }
-        }
-
     def fit(self, X, y=None):
         """Get column names and number of features from the input data."""
 
