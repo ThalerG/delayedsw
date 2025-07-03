@@ -74,5 +74,5 @@ def test_pipeline_compatibility():
 def test_sklearn_compatibility():
     """Run sklearn's built-in check on custom transformer."""
     # This test checks compliance with sklearn's API contracts
-    check_estimator(DelayedSlidingWindow)
+    check_estimator(DelayedSlidingWindow())
     pass
