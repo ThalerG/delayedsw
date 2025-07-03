@@ -41,7 +41,7 @@ def test_delayed_sliding_window_with_pandas():
 
     X = pd.DataFrame({
         'A': [1, 2, 3, 4, 5],
-        'B': [10, 20, 30, 40, 50],
+        'B': [10.0, 20.0, 30.0, 40.0, 50.0],
         'C': [200, 400, 600, 800, 1000]
     })
 
@@ -49,8 +49,8 @@ def test_delayed_sliding_window_with_pandas():
     X_transformed = transformer.fit_transform(X)
 
     expected = pd.DataFrame({
-        'B_0': [30, 40, 50],
-        'B_2': [10, 20, 30],
+        'B_0': [30.0, 40.0, 50.0],
+        'B_2': [10.0, 20.0, 30.0],
         'C_0': [600, 800, 1000],
         'C_2': [200, 400, 600]
     })
