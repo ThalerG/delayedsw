@@ -6,7 +6,7 @@ import numpy as np
 class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
     def __init__(self, window_size:int =1, delay_space: int=1, columns_to_transform: list[str|int]|None =None, 
                  feature_names_in: list[str]|None = None, n_features_in: int|None = None, 
-                 order_by: int|str|None = None, split_by: int|str|None = None):
+                 order_by: int|str|None = None, split_by: int|str|None = None, drop_nan: bool = True):
         """Initialize the DelayedSlidingWindow transformer."""
 
         if not isinstance(window_size, int) or window_size <= 0:
@@ -34,9 +34,34 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         self.columns_to_transform = columns_to_transform
         self.order_by = order_by
         self.split_by = split_by
+        self.drop_nan = drop_nan
+
+    def _more_tags(self):
+        """Additional tags for sklearn compatibility."""
+        return {
+            'requires_fit': True,
+            'allow_nan': True,
+            'requires_columns': False,
+            'preserves_dtype': [],
+            '_xfail_checks': {
+                'check_estimators_dtypes',
+                'check_fit2d_predict1d',
+            }
+        }
 
     def fit(self, X, y=None):
         """Get column names and number of features from the input data."""
+
+        # Store original input information for output formatting
+        self._check_input(X)
+
+        self.input_type_ = type(X)
+            
+        return self
+    
+    def _check_input(self, X):
+        """Check and set input data attributes."""
+        
         if hasattr(X, 'shape'):
             self.n_features_in_ = X.shape[1]
         else:
@@ -74,13 +99,10 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         else:
             # If no specific columns are provided, transform all columns
             self.columns_indices_ = list(range(self.n_features_in_))
-            
-        return self
     
     def transform(self, X, y=None):
         """Transform the data using a sliding window with delay."""
 
-        self.feature_names_out_ = []
 
         if not hasattr(self, 'columns_indices_'):
             # If columns_indices_ is not set, it means fit was not called or columns_to_transform was not specified
@@ -90,6 +112,7 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
             X = X.values  # Convert DataFrame to numpy array if necessary
         
         X = X[:, self.columns_indices_]
+        self.feature_names_out_ = []
 
         for i in range(X.shape[1]):
             matrix_sliding = self.sliding_1d(X[:, i])
@@ -122,12 +145,25 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
 
         # Create the sliding window with delay
         windows = []
-        for i in range((self.window_size-1) * self.delay_space, n):
-            indices = range(i, i-1-(self.window_size-1)*self.delay_space, -self.delay_space)
-            window = X[list(indices)]
-            windows.append(window)
         
-        return np.array(windows)
+        # Efficient implementation using numpy stride tricks
+        pad_width = (self.window_size - 1) * self.delay_space
+        X_padded = np.concatenate([np.full(pad_width, np.nan), X])
+        indices = np.arange(n) + pad_width
+        window_indices = np.array([indices - k * self.delay_space for k in range(self.window_size)])
+        windows = X_padded[window_indices].T
+
+        # Remove rows with NaN values if drop_nan is True
+        if self.drop_nan:
+            windows = windows[~np.isnan(windows).any(axis=1)]
+        
+        if self.input_type_ == np.ndarray:
+            # If input was a numpy array, return a numpy array
+            return windows
+        else:
+            # If input was a pandas DataFrame, return a DataFrame with appropriate column names
+            import pandas as pd
+            return pd.DataFrame(windows, columns=self.feature_names_out_)
     
     def get_feature_names_out(self, input_features=None):
         """Get the feature names after transformation."""
