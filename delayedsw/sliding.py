@@ -108,14 +108,18 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
             # If columns_indices_ is not set, it means fit was not called or columns_to_transform was not specified
             raise ValueError("The transformer has not been fitted yet. Call 'fit' before 'transform'.")
         
+        original_index = X.index if hasattr(X, 'index') else np.arange(X.shape[0])
         if hasattr(X, 'columns'):
             X = X.values  # Convert DataFrame to numpy array if necessary
-        
+
         X = X[:, self.columns_indices_]
         self.feature_names_out_ = []
 
         for i in range(X.shape[1]):
             matrix_sliding = self.sliding_1d(X[:, i])
+
+            # TODO: implement sorting by order_by and split_by if specified
+
             if i == 0:
                 delayedData = matrix_sliding
             else:
@@ -126,13 +130,21 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
             feature_name = [f"{self.feature_names_in_[i]}_{d}" for d in delay_index]
             self.feature_names_out_.extend(feature_name)
 
+        # Get the index of the remaining rows before dropping NaNs
+        if self.drop_nan:
+            valid_rows = ~np.isnan(delayedData).any(axis=1)
+            delayedData = delayedData[valid_rows]
+        else:
+            valid_rows = np.arange(delayedData.shape[0])
+
         if self.input_type_ == np.ndarray:
             # If input was a numpy array, return a numpy array
             return delayedData
         else:
-            # If input was a pandas DataFrame, return a DataFrame with appropriate column names
             import pandas as pd
-            return pd.DataFrame(delayedData, columns=self.feature_names_out_)
+            # If input was a pandas DataFrame, return a DataFrame with appropriate column names and index
+            
+            return pd.DataFrame(delayedData, columns=self.feature_names_out_, index=original_index[valid_rows])
     
     def sliding_1d(self, X):
         """Apply delayed space sliding window to a 1D array."""
@@ -159,10 +171,6 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         window_indices = np.array([indices - k * self.delay_space for k in range(self.window_size)])
         windows = X_padded[window_indices].T
 
-        # Remove rows with NaN values if drop_nan is True
-        if self.drop_nan:
-            windows = windows[~np.isnan(windows).any(axis=1)]
-        
         return windows
     
     def get_feature_names_out(self, input_features=None):
