@@ -125,8 +125,14 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
             delay_index = [k * self.delay_space for k in range(self.window_size)]
             feature_name = [f"{self.feature_names_in_[i]}_{d}" for d in delay_index]
             self.feature_names_out_.extend(feature_name)
-        
-        return delayedData
+
+        if self.input_type_ == np.ndarray:
+            # If input was a numpy array, return a numpy array
+            return delayedData
+        else:
+            # If input was a pandas DataFrame, return a DataFrame with appropriate column names
+            import pandas as pd
+            return pd.DataFrame(delayedData, columns=self.feature_names_out_)
     
     def sliding_1d(self, X):
         """Apply delayed space sliding window to a 1D array."""
@@ -157,13 +163,7 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         if self.drop_nan:
             windows = windows[~np.isnan(windows).any(axis=1)]
         
-        if self.input_type_ == np.ndarray:
-            # If input was a numpy array, return a numpy array
-            return windows
-        else:
-            # If input was a pandas DataFrame, return a DataFrame with appropriate column names
-            import pandas as pd
-            return pd.DataFrame(windows, columns=self.feature_names_out_)
+        return windows
     
     def get_feature_names_out(self, input_features=None):
         """Get the feature names after transformation."""
