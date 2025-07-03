@@ -50,7 +50,7 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         """Check and set input data attributes."""
         
         if hasattr(X, 'shape'):
-            self.n_features_in = X.shape[1]
+            self.n_features_in_ = X.shape[1]
         else:
             raise ValueError("Input data must have a shape attribute (e.g., a numpy array or pandas DataFrame).")
         
@@ -60,12 +60,12 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         
         if self.feature_names_in is None:
             if hasattr(X, 'columns'):
-                self.feature_names_in = X.columns.tolist()
+                self.feature_names_in_ = X.columns.tolist()
             else:
-                self.feature_names_in = [f"feature_{i}" for i in range(X.shape[1])]
+                self.feature_names_in_ = [f"feature_{i}" for i in range(X.shape[1])]
 
         if self.columns_to_transform is not None:
-            if not all(isinstance(col, int) and 0 <= col < self.n_features_in for col in self.columns_to_transform): # Column names are not integer indices
+            if not all(isinstance(col, int) and 0 <= col < self.n_features_in_ for col in self.columns_to_transform): # Column names are not integer indices
                 if hasattr(X, 'columns'):
                     # X is a pandas DataFrame, columns_to_transform should be column names (strings)
                     if not all(col in X.columns for col in self.columns_to_transform):
@@ -81,11 +81,11 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
                 # If columns_to_transform are valid indices, use them directly
                 self.columns_indices_ = self.columns_to_transform
 
-            self.feature_names_in = [self.feature_names_in[i] for i in self.columns_indices_]
+            self.feature_names_in_ = [self.feature_names_in_[i] for i in self.columns_indices_]
 
         else:
             # If no specific columns are provided, transform all columns
-            self.columns_indices_ = list(range(self.n_features_in))
+            self.columns_indices_ = list(range(self.n_features_in_))
     
     def transform(self, X, y=None):
         """Transform the data using a sliding window with delay."""
@@ -116,7 +116,7 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
 
             # Generate feature names
             delay_index = [k * self.delay_space for k in range(self.window_size)]
-            feature_name = [f"{self.feature_names_in[i]}_{d}" for d in delay_index]
+            feature_name = [f"{self.feature_names_in_[i]}_{d}" for d in delay_index]
             self.feature_names_out_.extend(feature_name)
 
         # Get the index of the remaining rows before dropping NaNs
