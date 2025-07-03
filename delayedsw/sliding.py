@@ -36,7 +36,7 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         self.split_by = split_by
         self.drop_nan = drop_nan
 
-    def _more_tags(self):
+    def __sklearn_tags__(self):
         """Additional tags for sklearn compatibility."""
         return {
             'requires_fit': True,
