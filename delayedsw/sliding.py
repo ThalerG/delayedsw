@@ -122,13 +122,12 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
 
         # Create the sliding window with delay
         windows = []
-        for i in range(n - self.window_size * self.delay_space + self.delay_space, 0, -self.delay_space):
-            start = i - self.window_size * self.delay_space
-            indices = range(start, i, self.delay_space)
+        for i in range((self.window_size-1) * self.delay_space, n):
+            indices = range(i, i-1-(self.window_size-1)*self.delay_space, -self.delay_space)
             window = X[list(indices)]
             windows.append(window)
-
-        return np.array(windows[::-1])
+        
+        return np.array(windows)
     
     def get_feature_names_out(self, input_features=None):
         """Get the feature names after transformation."""
