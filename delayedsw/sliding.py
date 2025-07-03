@@ -110,7 +110,9 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
         
         original_index = X.index if hasattr(X, 'index') else np.arange(X.shape[0])
         if hasattr(X, 'columns'):
+            input_dtypes = X.dtypes.values[self.columns_indices_]
             X = X.values  # Convert DataFrame to numpy array if necessary
+            
 
         X = X[:, self.columns_indices_]
         self.feature_names_out_ = []
@@ -144,7 +146,10 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
             import pandas as pd
             # If input was a pandas DataFrame, return a DataFrame with appropriate column names and index
             
-            return pd.DataFrame(delayedData, columns=self.feature_names_out_, index=original_index[valid_rows])
+            output_dtypes = input_dtypes.repeat(self.window_size)
+            output_dtypes = {name: dtype for name, dtype in zip(self.feature_names_out_, output_dtypes)}
+            delayedData =  pd.DataFrame(delayedData, columns=self.feature_names_out_, index=original_index[valid_rows])
+            return delayedData.astype(output_dtypes)
     
     def sliding_1d(self, X):
         """Apply delayed space sliding window to a 1D array."""
