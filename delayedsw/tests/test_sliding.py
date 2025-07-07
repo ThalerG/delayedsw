@@ -35,9 +35,6 @@ def test_delayed_sliding_window_with_columns():
 
 def test_delayed_sliding_window_with_pandas():
     import pandas as pd
-    from sklearn import set_config
-
-    set_config(transform_output='pandas')
 
     X = pd.DataFrame({
         'A': [1, 2, 3, 4, 5],
@@ -75,4 +72,3 @@ def test_sklearn_compatibility():
     """Run sklearn's built-in check on custom transformer."""
     # This test checks compliance with sklearn's API contracts
     check_estimator(DelayedSlidingWindow())
-    pass
