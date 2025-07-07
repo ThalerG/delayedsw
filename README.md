@@ -47,8 +47,6 @@ print(X_transformed)
 - `delay_space` (int, default=1): Space between delayed samples
 - `columns_to_transform` (list, optional): Specific columns to transform (indices or names)
 - `drop_nan` (bool, default=True): Whether to drop NaN values from output
-- `feature_names_in` (list, optional): Input feature names
-- `n_features_in` (int, optional): Number of input features
 - `order_by` (int/str, optional): Column to order by (not implemented yet)
 - `split_by` (int/str, optional): Column to split by (not implemented yet)
 
@@ -119,7 +117,7 @@ from delayedsw import DelayedSlidingWindow
 
 # Create pipeline
 pipeline = Pipeline([
-    ('delayed_window', DelayedSlidingWindow(window_size=3, delay_space=1)),
+    ('delayed_window', DelayedSlidingWindow(window_size=3, delay_space=3)),
     ('scaler', StandardScaler())
 ])
 
@@ -141,10 +139,7 @@ For example, with `window_size=2` and `delay_space=2`:
 
 ## Current Limitations
 
-⚠️ **Note**: The current version has **limited scikit-learn compatibility**. While it implements the basic transformer interface, it may not pass all sklearn estimator checks. Future versions will address full sklearn API compliance.
-
 ### Known Issues:
-- Some sklearn estimator checks may fail
 - `order_by` and `split_by` parameters are not yet implemented
 
 ## API Reference
@@ -154,8 +149,7 @@ For example, with `window_size=2` and `delay_space=2`:
 ```python
 class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
     def __init__(self, window_size=1, delay_space=1, columns_to_transform=None, 
-                 feature_names_in=None, n_features_in=None, order_by=None, 
-                 split_by=None, drop_nan=True)
+                 order_by=None, split_by=None, drop_nan=True)
     
     def fit(self, X, y=None)
     def transform(self, X, y=None)
@@ -192,8 +186,7 @@ Gabriel Thaler
 
 ## Roadmap
 
-- [ ] Full scikit-learn API compatibility
+- [X] Full scikit-learn API compatibility
 - [ ] Implementation of `order_by` and `split_by` parameters
 - [ ] Performance optimizations
-- [ ] Additional windowing strategies
 - [ ] Comprehensive documentation and examples
