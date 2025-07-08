@@ -13,21 +13,26 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         "window_size": [Interval(Integral, 1, None, closed="left")],  # Must be a positive integer
         "delay_space": [Interval(Integral, 1, None, closed="left")],  # Must be a positive integer
         "columns_to_transform": [list, None],  # Must be a list of column names or indices or None
-        "order_by": [str, int, None],  # Must be a string or int
-        "split_by": [str, int, None],  # Must be a string or int
+        "order_by": ["array-like", None],  # Must be an array-like object with the same number of rows as X or None
+        "split_by": ["array-like", None],  # Must be an array-like object with the same number of rows as X or None
         "drop_nan": ["boolean"],  # Must be a boolean
+        "include_order": ["boolean"],  # Must be a boolean
+        "include_split": ["boolean"]  # Must be a boolean
     }
 
     def __init__(self, window_size:int =1, delay_space: int=1, columns_to_transform: list[str|int]|None =None, 
-                 order_by: int|str|None = None, split_by: int|str|None = None, drop_nan: bool = True):
+                 order_by = None, split_by = None, 
+                 drop_nan: bool = True, include_order: bool = False, include_split: bool = False):
         """Initialize the DelayedSlidingWindow transformer."""
 
         self.window_size = window_size
         self.delay_space = delay_space
         self.columns_to_transform = columns_to_transform
+        self.drop_nan = drop_nan
+        self.include_order = include_order
+        self.include_split = include_split
         self.order_by = order_by
         self.split_by = split_by
-        self.drop_nan = drop_nan
 
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y=None):
