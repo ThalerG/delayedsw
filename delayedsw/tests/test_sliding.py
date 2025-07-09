@@ -85,6 +85,37 @@ def test_delayed_sliding_window_with_pandas_ordered():
 
     pd.testing.assert_frame_equal(X_transformed.reset_index(drop=True), expected.reset_index(drop=True))
 
+
+def test_delayed_sliding_window_with_pandas_split():
+    import pandas as pd
+
+    X = pd.DataFrame({
+        'A': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+        'B': [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150],
+        'C': [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000],
+        'split1': ['A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'B', 'B'],
+        'split2': [1,1,1,1,1,2,2,2,2,1,1,1,1,1,1]  # Fixed syntax error (missing comma)
+    })
+
+    transformer = DelayedSlidingWindow(window_size=2, delay_space=2, columns_to_transform=['B', 'C'], split_by=['split1', 'split2'])
+    X_transformed = transformer.fit_transform(X)
+
+    # When split by 'split1' and 'split2', we get separate groups:
+    # Group A-1: indices [0,1,2,3,4] with order [1,2,3,4,5] -> B:[10,20,30,40,50], C:[200,400,600,800,1000]
+    # Group A-2: indices [5,6,7,8] with order [1,2,3,4] -> B:[60,70,80,90], C:[1200,1400,1600,1800]
+    # Group B-1: indices [9,10,11,12,13,14] with order [1,2,3,4,5,6] -> B:[100,110,120,130,140,150], C:[2000,2200,2400,2600,2800,3000]
+    
+    # With window_size=2, delay_space=2, each group contributes valid rows:
+    expected = pd.DataFrame({
+        'B_0': [30.0, 40.0, 50.0, 80.0, 90.0, 120.0, 130.0, 140.0, 150.0],  # Current values (lag 0)
+        'B_2': [10.0, 20.0, 30.0, 60.0, 70.0, 100.0, 110.0, 120.0, 130.0], # Values at lag 2
+        'C_0': [600, 800, 1000, 1600, 1800, 2400, 2600, 2800, 3000],       # Current C values
+        'C_2': [200, 400, 600, 1200, 1400, 2000, 2200, 2400, 2600]         # C values at lag 2
+    })
+
+    pd.testing.assert_frame_equal(X_transformed.reset_index(drop=True), expected.reset_index(drop=True))
+
+
 def test_delayed_sliding_window_with_pandas_ordered_split():
     import pandas as pd
 
