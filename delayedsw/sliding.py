@@ -16,25 +16,23 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         "order_by": [str, int, list, None],  # Must be a string or int or list or None
         "split_by": [str, int, list, None],  # Must be a string or int or list or None
         "drop_nan": ["boolean"],  # Must be a boolean
-        "drop_order": ["boolean"],  # Must be a boolean
-        "drop_split": ["boolean"]  # Must be a boolean
+        "inclu_order": ["boolean"],  # Must be a boolean
+        "include_split": ["boolean"]  # Must be a boolean
     }
 
     def __init__(self, window_size:int =1, delay_space: int=1, columns_to_transform: list[str|int]|None =None, 
                  order_by: int|str|list[int|str]|None = None, split_by: int|str|list[int|str]|None = None, 
-                 drop_nan: bool = True, drop_order: bool = True, drop_split: bool = True):
+                 drop_nan: bool = True, include_order: bool = False, include_split: bool = False):
         """Initialize the DelayedSlidingWindow transformer."""
 
         self.window_size = window_size
         self.delay_space = delay_space
         self.columns_to_transform = columns_to_transform
         self.drop_nan = drop_nan
-        self.drop_order = drop_order
-        self.drop_split = drop_split
+        self.include_order = include_order
+        self.include_split = include_split
         self.order_by = order_by
-        self.split_by = split_by
-
-        
+        self.split_by = split_by        
 
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y=None):
@@ -43,25 +41,56 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         # Store original input information for output formatting
         self.input_type_ = type(X)
         
-        if y is not None:
-            (X, y) = validate_data(self,X, y, reset = True)
-        else:
-            X = validate_data(self, X, reset = True)
+        validate_data(self,X, y, reset = True, skip_check_array=False)
 
-        # Convert order_by and split_by to lists if they are single values
-        if isinstance(self.order_by, (str, int)):
-            self._order_by = [self.order_by]
-        else:
-            self._order_by = self.order_by if self.order_by is not None else []
-        if isinstance(self.split_by, (str, int)):
-            self._split_by = [self.split_by]
-        else:
-            self._split_by = self.split_by if self.split_by is not None else []
-
+        self._check_order(X)
+        self._check_split(X)
         self._check_input(X)
             
         return self
     
+    def _check_order(self, X):
+        """Check and set order_by attribute."""
+        # TODO: get the columns to order by
+
+
+    def _check_split(self, X):
+        """Check and set split_by attribute."""
+        
+        # Check if split_by is a single value or a list
+        if isinstance(self.split_by, list):
+            if not all(isinstance(col, (str, int)) for col in self.split_by):
+                raise ValueError("If split_by is a list, it must contain only strings or integers.")
+        elif self.split_by is None:
+            self._split_by = []
+            self._split_by_array = np.ones((X.shape[0], 1))  # Ones array for no split
+            return
+        elif isinstance(self.split_by, (str, int)):
+            self._split_by = [self.split_by]
+        else:
+            raise ValueError("split_by must be a string, integer, list of strings or integers, or None.")
+
+        if all(isinstance(col, int) for col in self.split_by):
+            # If all columns are indices, check if they are valid
+            if not all(0 <= col < X.shape[1] for col in self.split_by):
+                raise ValueError("All indices in split_by must be less than the number of features in the input data.")
+            else:
+                self._split_by = self.split_by
+                self._split_by_array = X[:, self._split_by]
+        else:
+            # If split_by contains strings, check if they are valid column names
+            if hasattr(self, 'feature_names_in_'):
+                if not all(col in self.feature_names_in_ for col in self.split_by):
+                    raise ValueError("All column names in split_by must be valid names of the input data.")
+                else:
+                    temp_columns = list(self.feature_names_in_)
+                    split_by_index = [temp_columns.index(col) for col in self._split_by]
+                    self._split_by_array = X[:, split_by_index]
+            else:
+                raise ValueError("If split_by contains strings, X must provide feature names.")
+
+
+
     def _check_input(self, X):
         """Check and set input data attributes."""
         
@@ -103,7 +132,8 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
             delay_index = [k * self.delay_space for k in range(self.window_size)]
             feature_name = [f"{column_in}_{d}" for d in delay_index]
             self.feature_names_out_.extend(feature_name)
-    
+
+        
     def transform(self, X, y=None):
         """Transform the data using a sliding window with delay."""
 
@@ -132,6 +162,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
 
         check_is_fitted(self, '_columns_indices')
 
+        # If columns_to_transform is specified, select only those columns
         X = X[:, self._columns_indices]
 
         for i in range(X.shape[1]):
