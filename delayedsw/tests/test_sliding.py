@@ -60,15 +60,16 @@ def test_delayed_sliding_window_with_pandas_ordered():
 
     X = pd.DataFrame({
         'A': [2, 4, 1, 3, 5],
-        'B': [20, 40, 10, 30, 50],
+        'B': [20.0, 40.0, 10.0, 30.0, 50.0],
         'C': [400, 800, 200, 600, 1000],
         'order': [2, 4, 1, 3, 5]
     })
+    order = X['order'].values
+    X = X.drop(columns=['order'])  # Drop order column for transformation
 
     transformer = DelayedSlidingWindow(window_size=2, delay_space=2, 
                                        columns_to_transform=['B', 'C'], 
-                                       order_by='order', include_order=False, 
-                                       split_by=['split1', 'split2'], include_split=False)
+                                       order_by=order, include_order=False)
     X_transformed = transformer.fit_transform(X)
 
     # When ordered by 'order' column [2,4,1,3,5], the sorted sequence becomes:
@@ -91,13 +92,16 @@ def test_delayed_sliding_window_with_pandas_split():
 
     X = pd.DataFrame({
         'A': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
-        'B': [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150],
+        'B': [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0],
         'C': [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000],
         'split1': ['A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'B', 'B'],
         'split2': [1,1,1,1,1,2,2,2,2,1,1,1,1,1,1]  # Fixed syntax error (missing comma)
     })
 
-    transformer = DelayedSlidingWindow(window_size=2, delay_space=2, columns_to_transform=['B', 'C'], split_by=['split1', 'split2'])
+    split = X[['split1', 'split2']].copy()
+    X = X.drop(columns=['split1', 'split2'])  # Drop split columns for transformation
+
+    transformer = DelayedSlidingWindow(window_size=2, delay_space=2, columns_to_transform=['B', 'C'], split_by=split)
     X_transformed = transformer.fit_transform(X)
 
     # When split by 'split1' and 'split2', we get separate groups:
@@ -121,17 +125,23 @@ def test_delayed_sliding_window_with_pandas_ordered_split():
 
     X = pd.DataFrame({
         'A': [8, 1, 12, 5, 14, 3, 9, 15, 7, 2, 11, 4, 6, 10, 13],
-        'B': [80, 10, 120, 50, 140, 30, 90, 150, 70, 20, 110, 40, 60, 100, 130],
+        'B': [80.0, 10.0, 120.0, 50.0, 140.0, 30.0, 90.0, 150.0, 70.0, 20.0, 110.0, 40.0, 60.0, 100.0, 130.0],
         'C': [1600, 200, 2400, 1000, 2800, 600, 1800, 3000, 1400, 400, 2200, 800, 1200, 2000, 2600],
         'order': [3, 1, 3, 5, 5, 3, 4, 6, 2, 2, 2, 4, 1, 1, 4],
         'split1': ['A', 'A', 'B', 'A', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B'],
         'split2': [1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 2, 2, 1, 1]
     })
 
+    order = X['order'].values
+    X = X.drop(columns=['order'])  # Drop order column for transformation
+
+    split = X[['split1', 'split2']].copy()
+    X = X.drop(columns=['split1', 'split2'])  # Drop split columns for transformation
+
     transformer = DelayedSlidingWindow(window_size=2, delay_space=2, 
                                        columns_to_transform=['B', 'C'], 
-                                       order_by='order', include_order=False, 
-                                       split_by=['split1', 'split2'], include_split=False)
+                                       order_by=order, include_order=False, 
+                                       split_by=split, include_split=False)
     X_transformed = transformer.fit_transform(X)
 
     # When split by 'split1' and 'split2', we get separate groups:
@@ -154,17 +164,23 @@ def test_delayed_sliding_window_with_pandas_ordered_split_nodrop():
 
     X = pd.DataFrame({
         'A': [8, 1, 12, 5, 14, 3, 9, 15, 7, 2, 11, 4, 6, 10, 13],
-        'B': [80, 10, 120, 50, 140, 30, 90, 150, 70, 20, 110, 40, 60, 100, 130],
+        'B': [80.0, 10.0, 120.0, 50.0, 140.0, 30.0, 90.0, 150.0, 70.0, 20.0, 110.0, 40.0, 60.0, 100.0, 130.0],
         'C': [1600, 200, 2400, 1000, 2800, 600, 1800, 3000, 1400, 400, 2200, 800, 1200, 2000, 2600],
         'order': [3, 1, 3, 5, 5, 3, 4, 6, 2, 2, 2, 4, 1, 1, 4],
         'split1': ['A', 'A', 'B', 'A', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B'],
         'split2': [1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 2, 2, 1, 1]
     })
 
+    order = X['order'].values
+    X = X.drop(columns=['order'])  # Drop order column for transformation
+
+    split = X[['split1', 'split2']].copy()
+    X = X.drop(columns=['split1', 'split2'])  # Drop split columns for transformation
+
     transformer = DelayedSlidingWindow(window_size=2, delay_space=2, 
                                        columns_to_transform=['B', 'C'], 
-                                       order_by='order', include_order=True, 
-                                       split_by=['split1', 'split2'], include_split=True)
+                                       order_by=order, include_order=True, 
+                                       split_by=split, include_split=True)
     X_transformed = transformer.fit_transform(X)
 
     # When split by 'split1' and 'split2', we get separate groups:
