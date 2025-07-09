@@ -169,15 +169,38 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         # If columns_to_transform is specified, select only those columns
         X = X[:, self._columns_indices]
 
-        for i in range(X.shape[1]):
-            matrix_sliding = self.sliding_1d(X[:, i])
+        # Split based on split_by:
+        unique_splits = np.unique(self._split_by_array, axis=0)
 
-            # TODO: implement sorting by order_by and split_by if specified
 
-            if i == 0:
-                delayedData = matrix_sliding
-            else:
-                delayedData = np.concatenate((delayedData, matrix_sliding), axis=1)
+        delayedData = []
+        for split in unique_splits:
+            # Get the indices of the current split
+            split_indices = np.all(self._split_by_array == split, axis=1)
+            for i in range(X.shape[1]):
+                # Apply sliding window to each column in the current split
+                matrix_sliding = self.sliding_1d(X[split_indices, i])
+
+                # If this is the first column, initialize delayedData
+                if i == 0:
+                    delayedData_split = matrix_sliding
+                else:
+                    delayedData_split = np.concatenate((delayedData_split, matrix_sliding), axis=1)
+            # Append the delayed data for the current split to the main delayedData
+            delayedData.append(delayedData_split)
+
+        # Concatenate all splits into a single array
+        delayedData = np.concatenate(delayedData, axis=0)
+
+        # for i in range(X.shape[1]):
+        #     matrix_sliding = self.sliding_1d(X[:, i])
+
+        #     # TODO: implement sorting by order_by and split_by if specified
+
+        #     if i == 0:
+        #         delayedData = matrix_sliding
+        #     else:
+        #         delayedData = np.concatenate((delayedData, matrix_sliding), axis=1)
 
         # Get the index of the remaining rows before dropping NaNs
         if self.drop_nan:
