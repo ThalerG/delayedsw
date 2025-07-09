@@ -16,7 +16,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         "order_by": [str, int, list, None],  # Must be a string or int or list or None
         "split_by": [str, int, list, None],  # Must be a string or int or list or None
         "drop_nan": ["boolean"],  # Must be a boolean
-        "inclu_order": ["boolean"],  # Must be a boolean
+        "include_order": ["boolean"],  # Must be a boolean
         "include_split": ["boolean"]  # Must be a boolean
     }
 
@@ -41,7 +41,10 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         # Store original input information for output formatting
         self.input_type_ = type(X)
         
-        validate_data(self,X, y, reset = True, skip_check_array=False)
+        if y is not None:
+            (X,y) = validate_data(self,X, y, reset = True)
+        else:
+            X = validate_data(self, X, reset=True)
 
         self._check_order(X)
         self._check_split(X)
@@ -63,7 +66,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
                 raise ValueError("If split_by is a list, it must contain only strings or integers.")
         elif self.split_by is None:
             self._split_by = []
-            self._split_by_array = np.ones((X.shape[0], 1))  # Ones array for no split
+            self._split_by_array = np.full((X.shape[0], 1), ' ', dtype=str)  # Array for no split
             return
         elif isinstance(self.split_by, (str, int)):
             self._split_by = [self.split_by]
@@ -76,16 +79,17 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
                 raise ValueError("All indices in split_by must be less than the number of features in the input data.")
             else:
                 self._split_by = self.split_by
-                self._split_by_array = X[:, self._split_by]
+                self._split_by_array = np.asarray(X[:, self._split_by], dtype=str)  # Save as string array for mixed types
         else:
             # If split_by contains strings, check if they are valid column names
             if hasattr(self, 'feature_names_in_'):
                 if not all(col in self.feature_names_in_ for col in self.split_by):
                     raise ValueError("All column names in split_by must be valid names of the input data.")
                 else:
+                    self._split_by = self.split_by
                     temp_columns = list(self.feature_names_in_)
                     split_by_index = [temp_columns.index(col) for col in self._split_by]
-                    self._split_by_array = X[:, split_by_index]
+                    self._split_by_array = np.asarray(X[:, split_by_index], dtype=str) # Save as string array for mixed types
             else:
                 raise ValueError("If split_by contains strings, X must provide feature names.")
 
@@ -177,6 +181,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
 
         # Get the index of the remaining rows before dropping NaNs
         if self.drop_nan:
+            delayedData = delayedData.astype(float) # TODO: might lead to trouble if input is not numeric
             valid_rows = ~np.isnan(delayedData).any(axis=1)
             delayedData = delayedData[valid_rows]
         else:
