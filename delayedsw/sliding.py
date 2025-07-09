@@ -55,9 +55,14 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
     def _check_order(self, X):
         """Check and set order_by attribute."""
         # Check if order_by is a single value or a list
+
+        # TODO: I'm not happy with this implementation, it should be more robust
+
         if isinstance(self.order_by, list):
             if not all(isinstance(col, (str, int)) for col in self.order_by):
                 raise ValueError("If order_by is a list, it must contain only strings or integers.")
+            else:
+                self._order_by = self.order_by
         elif self.order_by is None:
             self._order_by = []
             self._order_by_array = np.arange(X.shape[0]).reshape(-1, 1)  # Default: original order
@@ -67,20 +72,18 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         else:
             raise ValueError("order_by must be a string, integer, list of strings or integers, or None.")
 
-        if all(isinstance(col, int) for col in self.order_by):
+        if all(isinstance(col, int) for col in self._order_by):
             # If all columns are indices, check if they are valid
-            if not all(0 <= col < X.shape[1] for col in self.order_by):
+            if not all(0 <= col < X.shape[1] for col in self._order_by):
                 raise ValueError("All indices in order_by must be less than the number of features in the input data.")
             else:
-                self._order_by = self.order_by
                 self._order_by_array = np.asarray(X[:, self._order_by])  # Use as is for sorting
         else:
             # If order_by contains strings, check if they are valid column names
             if hasattr(self, 'feature_names_in_'):
-                if not all(col in self.feature_names_in_ for col in self.order_by):
+                if not all(col in self.feature_names_in_ for col in self._order_by):
                     raise ValueError("All column names in order_by must be valid names of the input data.")
                 else:
-                    self._order_by = self.order_by
                     temp_columns = list(self.feature_names_in_)
                     order_by_index = [temp_columns.index(col) for col in self._order_by]
                     self._order_by_array = np.asarray(X[:, order_by_index])
@@ -90,11 +93,15 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
 
     def _check_split(self, X):
         """Check and set split_by attribute."""
-        
         # Check if split_by is a single value or a list
+
+        # TODO: I'm not happy with this implementation, it should be more robust
+
         if isinstance(self.split_by, list):
             if not all(isinstance(col, (str, int)) for col in self.split_by):
                 raise ValueError("If split_by is a list, it must contain only strings or integers.")
+            else:
+                self._split_by = self.split_by
         elif self.split_by is None:
             self._split_by = []
             self._split_by_array = np.full((X.shape[0], 1), ' ', dtype=str)  # Array for no split
@@ -104,12 +111,11 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         else:
             raise ValueError("split_by must be a string, integer, list of strings or integers, or None.")
 
-        if all(isinstance(col, int) for col in self.split_by):
+        if all(isinstance(col, int) for col in self._split_by):
             # If all columns are indices, check if they are valid
-            if not all(0 <= col < X.shape[1] for col in self.split_by):
+            if not all(0 <= col < X.shape[1] for col in self._split_by):
                 raise ValueError("All indices in split_by must be less than the number of features in the input data.")
             else:
-                self._split_by = self.split_by
                 self._split_by_array = np.asarray(X[:, self._split_by], dtype=str)  # Save as string array for mixed types
         else:
             # If split_by contains strings, check if they are valid column names
@@ -117,7 +123,6 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
                 if not all(col in self.feature_names_in_ for col in self.split_by):
                     raise ValueError("All column names in split_by must be valid names of the input data.")
                 else:
-                    self._split_by = self.split_by
                     temp_columns = list(self.feature_names_in_)
                     split_by_index = [temp_columns.index(col) for col in self._split_by]
                     self._split_by_array = np.asarray(X[:, split_by_index], dtype=str) # Save as string array for mixed types
@@ -208,9 +213,17 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         for split in unique_splits:
             # Get the indices of the current split
             split_indices = np.all(self._split_by_array == split, axis=1)
+            order_by_split = self._order_by_array[split_indices]
+
+            X_sorted = X[split_indices, :]
+
+            # Sort the current split by order_by
+            order_indices = np.argsort(order_by_split, axis=0).flatten()
+            X_sorted = X_sorted[order_indices]
+
             for i in range(X.shape[1]):
                 # Apply sliding window to each column in the current split
-                matrix_sliding = self.sliding_1d(X[split_indices, i])
+                matrix_sliding = self.sliding_1d(X_sorted[:,i])
 
                 # If this is the first column, initialize delayedData
                 if i == 0:
