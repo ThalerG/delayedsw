@@ -64,8 +64,6 @@ def test_delayed_sliding_window_with_pandas_ordered():
         'C': [400, 800, 200, 600, 1000],
         'order': [2, 4, 1, 3, 5]
     })
-    order = X['order'].values
-    X = X.drop(columns=['order'])  # Drop order column for transformation
 
     transformer = DelayedSlidingWindow(window_size=2, delay_space=2, 
                                        columns_to_transform=['B', 'C'], 
