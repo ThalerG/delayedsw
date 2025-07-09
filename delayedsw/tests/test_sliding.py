@@ -67,8 +67,8 @@ def test_delayed_sliding_window_with_pandas_ordered():
 
     transformer = DelayedSlidingWindow(window_size=2, delay_space=2, 
                                        columns_to_transform=['B', 'C'], 
-                                       order_by='order', drop_order=True, 
-                                       split_by=['split1', 'split2'], drop_split=True)
+                                       order_by='order', include_order=False, 
+                                       split_by=['split1', 'split2'], include_split=False)
     X_transformed = transformer.fit_transform(X)
 
     # When ordered by 'order' column [2,4,1,3,5], the sorted sequence becomes:
@@ -130,8 +130,8 @@ def test_delayed_sliding_window_with_pandas_ordered_split():
 
     transformer = DelayedSlidingWindow(window_size=2, delay_space=2, 
                                        columns_to_transform=['B', 'C'], 
-                                       order_by='order', drop_order=True, 
-                                       split_by=['split1', 'split2'], drop_split=True)
+                                       order_by='order', include_order=False, 
+                                       split_by=['split1', 'split2'], include_split=False)
     X_transformed = transformer.fit_transform(X)
 
     # When split by 'split1' and 'split2', we get separate groups:
@@ -163,8 +163,8 @@ def test_delayed_sliding_window_with_pandas_ordered_split_nodrop():
 
     transformer = DelayedSlidingWindow(window_size=2, delay_space=2, 
                                        columns_to_transform=['B', 'C'], 
-                                       order_by='order', drop_order=False, 
-                                       split_by=['split1', 'split2'], drop_split=False)
+                                       order_by='order', include_order=True, 
+                                       split_by=['split1', 'split2'], include_split=True)
     X_transformed = transformer.fit_transform(X)
 
     # When split by 'split1' and 'split2', we get separate groups:
