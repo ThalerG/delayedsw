@@ -54,7 +54,38 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
     
     def _check_order(self, X):
         """Check and set order_by attribute."""
-        # TODO: get the columns to order by
+        # Check if order_by is a single value or a list
+        if isinstance(self.order_by, list):
+            if not all(isinstance(col, (str, int)) for col in self.order_by):
+                raise ValueError("If order_by is a list, it must contain only strings or integers.")
+        elif self.order_by is None:
+            self._order_by = []
+            self._order_by_array = np.arange(X.shape[0]).reshape(-1, 1)  # Default: original order
+            return
+        elif isinstance(self.order_by, (str, int)):
+            self._order_by = [self.order_by]
+        else:
+            raise ValueError("order_by must be a string, integer, list of strings or integers, or None.")
+
+        if all(isinstance(col, int) for col in self.order_by):
+            # If all columns are indices, check if they are valid
+            if not all(0 <= col < X.shape[1] for col in self.order_by):
+                raise ValueError("All indices in order_by must be less than the number of features in the input data.")
+            else:
+                self._order_by = self.order_by
+                self._order_by_array = np.asarray(X[:, self._order_by])  # Use as is for sorting
+        else:
+            # If order_by contains strings, check if they are valid column names
+            if hasattr(self, 'feature_names_in_'):
+                if not all(col in self.feature_names_in_ for col in self.order_by):
+                    raise ValueError("All column names in order_by must be valid names of the input data.")
+                else:
+                    self._order_by = self.order_by
+                    temp_columns = list(self.feature_names_in_)
+                    order_by_index = [temp_columns.index(col) for col in self._order_by]
+                    self._order_by_array = np.asarray(X[:, order_by_index])
+            else:
+                raise ValueError("If order_by contains strings, X must provide feature names.")
 
 
     def _check_split(self, X):
