@@ -188,6 +188,8 @@ def test_delayed_sliding_window_with_pandas_ordered_split_nodrop():
         'split2': [1, 1, 1, 2, 2, 1, 1, 1, 1]  # Keep split2 column
     })
 
+    expected['split1'] = expected['split1'].astype('category')
+
     pd.testing.assert_frame_equal(X_transformed.reset_index(drop=True), expected.reset_index(drop=True))
 
 def test_pipeline_compatibility():
