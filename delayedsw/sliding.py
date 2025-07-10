@@ -40,6 +40,8 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
 
         # Store original input information for output formatting
         self.input_type_ = type(X)
+
+        self._get_types(X)
         
         if y is not None:
             (X,y) = validate_data(self,X, y, reset = True)
@@ -52,11 +54,30 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
             
         return self
     
+    def _get_types(self, X):
+        """Get the types of the input data."""
+
+        # Save the input dtypes for output formatting if pandas DataFrame
+        if (hasattr(X, 'columns') and 
+            hasattr(X, 'index') and 
+            hasattr(X, 'dtypes') and
+            hasattr(X, 'iloc') and
+            type(X).__name__ == 'DataFrame'):
+            self._is_pandas = True
+            self._input_dtypes = X.dtypes.values
+        else: # Output is not a pandas DataFrame, no need to save dtypes
+            self._is_pandas = False
+            self._input_dtypes = None
+
+    
     def _check_order(self, X):
         """Check and set order_by attribute."""
         # Check if order_by is a single value or a list
 
         # TODO: I'm not happy with this implementation, it should be more robust
+
+        if self.order_by is None and self.include_order:
+            raise ValueError("If include_order is True, order_by must be provided.")
 
         if isinstance(self.order_by, list):
             if not all(isinstance(col, (str, int)) for col in self.order_by):
@@ -66,6 +87,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         elif self.order_by is None:
             self._order_by = []
             self._order_by_array = np.arange(X.shape[0]).reshape(-1, 1)  # Default: original order
+            self._order_by_dtype = None  # Default value for when order_by is None
             return
         elif isinstance(self.order_by, (str, int)):
             self._order_by = [self.order_by]
@@ -78,6 +100,10 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
                 raise ValueError("All indices in order_by must be less than the number of features in the input data.")
             else:
                 self._order_by_array = np.asarray(X[:, self._order_by])  # Use as is for sorting
+                if self._is_pandas:
+                    self._order_by_dtype = self._input_dtypes[self._order_by]
+                else:
+                    self._order_by_dtype = X[:, self._order_by].dtype
         else:
             # If order_by contains strings, check if they are valid column names
             if hasattr(self, 'feature_names_in_'):
@@ -87,6 +113,10 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
                     temp_columns = list(self.feature_names_in_)
                     order_by_index = [temp_columns.index(col) for col in self._order_by]
                     self._order_by_array = np.asarray(X[:, order_by_index])
+                    if self._is_pandas:
+                        self._order_by_dtype = self._input_dtypes[order_by_index]
+                    else:
+                        self._order_by_dtype = X[:, order_by_index].dtype
             else:
                 raise ValueError("If order_by contains strings, X must provide feature names.")
 
@@ -97,6 +127,9 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
 
         # TODO: I'm not happy with this implementation, it should be more robust
 
+        if self.split_by is None and self.include_split:
+            raise ValueError("If include_split is True, split_by must be provided.")
+
         if isinstance(self.split_by, list):
             if not all(isinstance(col, (str, int)) for col in self.split_by):
                 raise ValueError("If split_by is a list, it must contain only strings or integers.")
@@ -105,6 +138,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         elif self.split_by is None:
             self._split_by = []
             self._split_by_array = np.full((X.shape[0], 1), ' ', dtype=str)  # Array for no split
+            self._split_by_dtype = None
             return
         elif isinstance(self.split_by, (str, int)):
             self._split_by = [self.split_by]
@@ -117,6 +151,10 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
                 raise ValueError("All indices in split_by must be less than the number of features in the input data.")
             else:
                 self._split_by_array = np.asarray(X[:, self._split_by], dtype=str)  # Save as string array for mixed types
+                if self._is_pandas:
+                    self._split_by_dtype = self._input_dtypes[self._split_by]
+                else:
+                    self._split_by_dtype = X[:, self._split_by].dtype
         else:
             # If split_by contains strings, check if they are valid column names
             if hasattr(self, 'feature_names_in_'):
@@ -126,6 +164,10 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
                     temp_columns = list(self.feature_names_in_)
                     split_by_index = [temp_columns.index(col) for col in self._split_by]
                     self._split_by_array = np.asarray(X[:, split_by_index], dtype=str) # Save as string array for mixed types
+                    if self._is_pandas:
+                        self._split_by_dtype = self._input_dtypes[split_by_index]
+                    else:
+                        self._split_by_dtype = X[:, split_by_index].dtype
             else:
                 raise ValueError("If split_by contains strings, X must provide feature names.")
 
@@ -181,20 +223,8 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         original_index = X.index if hasattr(X, 'index') else None
 
         # Save the input dtypes for output formatting if pandas DataFrame
-        if hasattr(self, 'feature_names_in_'):
-            if (hasattr(X, 'columns') and 
-                hasattr(X, 'index') and 
-                hasattr(X, 'dtypes') and
-                hasattr(X, 'iloc') and
-                type(X).__name__ == 'DataFrame'):
-                is_pandas = True
-                input_dtypes = X.dtypes.values[self._columns_indices]
-            else:
-                is_pandas = False
-                input_dtypes = None
-        else:
-            is_pandas = False
-            input_dtypes = None
+        if self._is_pandas:
+            input_dtypes = self._input_dtypes[self._columns_indices]        
 
         X = validate_data(self, X, reset=False)
 
@@ -210,16 +240,22 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
 
 
         delayedData = []
+        index_after_split = []
         for split in unique_splits:
             # Get the indices of the current split
             split_indices = np.all(self._split_by_array == split, axis=1)
             order_by_split = self._order_by_array[split_indices]
 
             X_sorted = X[split_indices, :]
+            split_indexes = original_index[split_indices]
 
             # Sort the current split by order_by
             order_indices = np.argsort(order_by_split, axis=0).flatten()
             X_sorted = X_sorted[order_indices]
+            split_indexes = split_indexes[order_indices]
+
+            # Store the index of the current split for later use
+            index_after_split.append(split_indexes)
 
             for i in range(X.shape[1]):
                 # Apply sliding window to each column in the current split
@@ -236,31 +272,53 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         # Concatenate all splits into a single array
         delayedData = np.concatenate(delayedData, axis=0)
 
-        # for i in range(X.shape[1]):
-        #     matrix_sliding = self.sliding_1d(X[:, i])
-
-        #     # TODO: implement sorting by order_by and split_by if specified
-
-        #     if i == 0:
-        #         delayedData = matrix_sliding
-        #     else:
-        #         delayedData = np.concatenate((delayedData, matrix_sliding), axis=1)
+        index_after_split = np.concatenate(index_after_split, axis=0)
 
         # Get the index of the remaining rows before dropping NaNs
         if self.drop_nan:
             delayedData = delayedData.astype(float) # TODO: might lead to trouble if input is not numeric
             valid_rows = ~np.isnan(delayedData).any(axis=1)
             delayedData = delayedData[valid_rows]
+            index_after_split = index_after_split[valid_rows]
         else:
             valid_rows = np.arange(delayedData.shape[0])
 
-        if is_pandas:
+        if self.include_order:
+            # If include_order is True, append the order_by column to the output
+            order_col = np.array(self._order_by_array[index_after_split,:])
+            delayedData = np.concatenate((delayedData, order_col), axis=1)
+            self.feature_names_out_.extend(self._order_by)
+            
+
+
+        if self.include_split:
+            # If include_split is True, append the split_by column to the output
+            split_col = np.array(self._split_by_array[index_after_split,:])
+            delayedData = np.concatenate((delayedData, split_col), axis=1)
+            self.feature_names_out_.extend(self._split_by)
+        
+        if self._is_pandas:
             import pandas as pd
             # If input was a pandas DataFrame, return a DataFrame with appropriate column names and index
             
             output_dtypes = input_dtypes.repeat(self.window_size)
+            if self.include_order:
+                output_dtypes = np.append(output_dtypes, self._order_by_dtype)
+            if self.include_split:
+                output_dtypes = np.append(output_dtypes, self._split_by_dtype)
             output_dtypes = {name: dtype for name, dtype in zip(self.feature_names_out_, output_dtypes)}
-            delayedData =  pd.DataFrame(delayedData, columns=self.feature_names_out_, index=original_index[valid_rows])
+            delayedData =  pd.DataFrame(delayedData, columns=self.feature_names_out_, index=index_after_split)
+            
+            # This is a temporary fix to avoid issues with pandas converting float objects to int:
+            temp_outtypes = {}
+            for key, dtype in output_dtypes.items():
+                if dtype == 'int':
+                    temp_outtypes[key] = np.dtype(np.float64)  # Temporarily convert int to Float64
+                else:
+                    temp_outtypes[key] = dtype
+
+            delayedData = delayedData.convert_dtypes().astype(temp_outtypes)
+
             return delayedData.astype(output_dtypes)
         else:
             # If input was a numpy array, return a numpy array
