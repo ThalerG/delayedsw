@@ -244,6 +244,12 @@ Gabriel Thaler
 
 ## Changelog
 
+### v0.1.3
+
+- Implementation of `order_by` and `split_by` parameters
+- Support for `include_order` and `include_split` options
+- Enhanced pandas DataFrame support with dtype preservation
+
 ### v0.1.2
 - Full scikit-learn API compatibility
 
