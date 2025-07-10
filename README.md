@@ -1,6 +1,6 @@
 # delayedsw
 
-A Python library for preprocessing time series data using delayed space sliding window transformations. The `delayedsw` package provides a scikit-learn compatible transformer that creates lagged features from time series data.
+A Python library for preprocessing time series data using delayed space sliding window transformations. The `delayedsw` package provides a scikit-learn compatible transformer that creates lagged features from time series data with ordering and splitting capabilities.
 
 ## Installation
 
@@ -10,8 +10,8 @@ pip install git+https://github.com/ThalerG/delayedsw
 
 ## Requirements
 
-- scikit-learn >= 1.0.0
-- numpy
+- Python >= 3.10
+- scikit-learn >= 1.6.1
 - pandas (optional, for DataFrame support)
 
 ## Quick Start
@@ -39,16 +39,21 @@ print(X_transformed)
 - **Multi-feature Support**: Handles multiple time series columns simultaneously
 - **Selective Column Transformation**: Transform only specific columns while preserving others
 - **Pandas Integration**: Full support for pandas DataFrames with column name preservation
+- **Ordering**: Sort data by specified columns before applying transformations
+- **Data Splitting**: Process data in separate groups based on splitting columns
 - **NaN Handling**: Configurable dropping of NaN values
+- **Scikit-learn Compatibility**: Full compatibility with sklearn's transformer API
 
 ### Parameters
 
 - `window_size` (int, default=1): Size of the sliding window
 - `delay_space` (int, default=1): Space between delayed samples
 - `columns_to_transform` (list, optional): Specific columns to transform (indices or names)
+- `order_by` (int/str/list, optional): Column(s) to order by before transformation
+- `split_by` (int/str/list, optional): Column(s) to split data into separate groups
 - `drop_nan` (bool, default=True): Whether to drop NaN values from output
-- `order_by` (int/str, optional): Column to order by (not implemented yet)
-- `split_by` (int/str, optional): Column to split by (not implemented yet)
+- `include_order` (bool, default=False): Whether to include order columns in output
+- `include_split` (bool, default=False): Whether to include split columns in output
 
 ## Examples
 
@@ -108,6 +113,32 @@ print(result.columns)
 # Output: ['sensor1_0', 'sensor1_2', 'sensor3_0', 'sensor3_2']
 ```
 
+### Ordering and Splitting
+
+```python
+import pandas as pd
+from delayedsw import DelayedSlidingWindow
+
+# Create DataFrame with ordering and splitting columns
+df = pd.DataFrame({
+    'value': [80, 10, 120, 50, 140, 30, 90, 150],
+    'timestamp': [3, 1, 3, 5, 5, 3, 4, 6],
+    'group': ['A', 'A', 'B', 'A', 'B', 'A', 'A', 'B']
+})
+
+# Transform with ordering and splitting
+transformer = DelayedSlidingWindow(
+    window_size=2, 
+    delay_space=2,
+    columns_to_transform=['value'],
+    order_by='timestamp',    # Sort by timestamp within each group
+    split_by='group',        # Process each group separately
+    include_order=True,      # Include timestamp in output
+    include_split=True       # Include group in output
+)
+result = transformer.fit_transform(df)
+```
+
 ### Pipeline Integration
 
 ```python
@@ -117,7 +148,7 @@ from delayedsw import DelayedSlidingWindow
 
 # Create pipeline
 pipeline = Pipeline([
-    ('delayed_window', DelayedSlidingWindow(window_size=3, delay_space=3)),
+    ('delayed_window', DelayedSlidingWindow(window_size=3, delay_space=1)),
     ('scaler', StandardScaler())
 ])
 
@@ -128,19 +159,24 @@ X_processed = pipeline.fit_transform(X)
 
 The delayed space sliding window transformer creates lagged features by:
 
-1. **Window Creation**: For each time point, creates a window of `window_size` previous values
-2. **Delay Application**: Spaces the lagged values by `delay_space` samples
-3. **Feature Generation**: Generates new features with descriptive names (e.g., `feature_0`, `feature_1`, etc.)
+1. **Data Splitting**: If `split_by` is specified, data is split into separate groups
+2. **Ordering**: Within each group, data is sorted by `order_by` columns if specified
+3. **Window Creation**: For each time point, creates a window of `window_size` previous values
+4. **Delay Application**: Spaces the lagged values by `delay_space` time steps
+5. **Feature Generation**: Generates new features with descriptive names (e.g., `feature_0`, `feature_2`, etc.)
 
 For example, with `window_size=2` and `delay_space=2`:
 - Original: `[1, 2, 3, 4, 5]`
 - Transformed: `[[3, 1], [4, 2], [5, 3]]`
 - Features represent: `[current, lag_2]`
 
-## Current Limitations
+## Scikit-learn Compatibility
 
-### Known Issues:
-- `order_by` and `split_by` parameters are not yet implemented
+✅ **Full scikit-learn API compatibility** - The transformer passes all sklearn estimator checks and can be used in:
+- Pipelines
+- Grid search
+- Cross-validation
+- Any sklearn workflow
 
 ## API Reference
 
@@ -149,7 +185,8 @@ For example, with `window_size=2` and `delay_space=2`:
 ```python
 class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
     def __init__(self, window_size=1, delay_space=1, columns_to_transform=None, 
-                 order_by=None, split_by=None, drop_nan=True)
+                 order_by=None, split_by=None, drop_nan=True, 
+                 include_order=False, include_split=False)
     
     def fit(self, X, y=None)
     def transform(self, X, y=None)
@@ -157,20 +194,41 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
     def get_feature_names_out(self, input_features=None)
 ```
 
+#### Parameters
+
+- **window_size** (int, default=1): Size of the sliding window. Must be >= 1.
+- **delay_space** (int, default=1): Space between delayed samples. Must be >= 1.
+- **columns_to_transform** (list, optional): List of column names or indices to transform. If None, all columns are transformed.
+- **order_by** (str, int, or list, optional): Column(s) to sort by before transformation.
+- **split_by** (str, int, or list, optional): Column(s) to split data into separate groups.
+- **drop_nan** (bool, default=True): Whether to drop rows with NaN values.
+- **include_order** (bool, default=False): Whether to include order columns in output.
+- **include_split** (bool, default=False): Whether to include split columns in output.
+
 ## Testing
 
 Run tests with pytest:
 
 ```bash
-pytest tests/
+pytest delayedsw/tests/
 ```
 
 The test suite includes:
 - Basic functionality tests
 - Multi-feature transformation tests
 - Pandas DataFrame integration tests
+- Ordering and splitting functionality tests
 - Pipeline compatibility tests
-- Basic sklearn compatibility tests
+- Full sklearn compatibility tests
+
+## Installation for Development
+
+```bash
+git clone https://github.com/ThalerG/delayedsw
+cd delayedsw
+pip install -e .
+pip install -e .[test]  # Install with test dependencies
+```
 
 ## Contributing
 
@@ -184,9 +242,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Gabriel Thaler
 
-## Roadmap
+## Changelog
 
-- [X] Full scikit-learn API compatibility
-- [ ] Implementation of `order_by` and `split_by` parameters
-- [ ] Performance optimizations
-- [ ] Comprehensive documentation and examples
+### v0.1.2
+- Full scikit-learn API compatibility
+
+### v0.1.1
+- Initial release with basic sliding window functionality
+- Basic pandas support
+- Limited sklearn compatibility
