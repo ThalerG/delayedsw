@@ -7,8 +7,12 @@ setup(
     description='Delayed space sliding window transformer',
     author='Gabriel Thaler',
     packages=find_packages(),
+    python_requires='>=3.10',
     install_requires=[
-        'scikit-learn>=1.6.0',
-        'numpy'
+        'scikit-learn>=1.6.1',
     ],
+    extras_require = {
+        'pandas_support':  ["pandas"],
+        'test' : ["pytest", "pandas"]
+    }
 )
