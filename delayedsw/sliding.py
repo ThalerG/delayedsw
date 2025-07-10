@@ -85,9 +85,9 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
             else:
                 self._order_by = self.order_by
         elif self.order_by is None:
-            self._order_by = []
-            self._order_by_array = np.arange(X.shape[0]).reshape(-1, 1)  # Default: original order
-            self._order_by_dtype = None  # Default value for when order_by is None
+            self._order_by = None
+            self._order_by_array = np.arange(X.shape[0]).reshape(-1, 1)
+            self._order_by_dtype = None
             return
         elif isinstance(self.order_by, (str, int)):
             self._order_by = [self.order_by]
@@ -136,7 +136,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
             else:
                 self._split_by = self.split_by
         elif self.split_by is None:
-            self._split_by = []
+            self._split_by = None
             self._split_by_array = np.full((X.shape[0], 1), ' ', dtype=str)  # Array for no split
             self._split_by_dtype = None
             return
@@ -220,13 +220,28 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         """Transform the data using a sliding window with delay."""
 
         # Save the original index of the input data for output formatting if pandas DataFrame
-        original_index = X.index if hasattr(X, 'index') else None
+        original_index = X.index if self._is_pandas else None
 
         # Save the input dtypes for output formatting if pandas DataFrame
         if self._is_pandas:
             input_dtypes = self._input_dtypes[self._columns_indices]        
 
         X = validate_data(self, X, reset=False)
+
+        if self.split_by is None:
+            split_by_array = np.full((X.shape[0], 1), ' ', dtype=str)  # Array for no split
+            split_by_dtype = None
+        else:
+            split_by_array = self._split_by_array
+            split_by_dtype = self._split_by_dtype
+        
+        if self.order_by is None:
+            order_by_array = np.arange(X.shape[0]).reshape(-1, 1)
+            order_by_dtype = None
+        else:
+            order_by_array = self._order_by_array
+            order_by_dtype = self._order_by_dtype
+            
 
         original_index = original_index if original_index is not None else np.arange(X.shape[0])
 
@@ -236,15 +251,15 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
         X = X[:, self._columns_indices]
 
         # Split based on split_by:
-        unique_splits = np.unique(self._split_by_array, axis=0)
+        unique_splits = np.unique(split_by_array, axis=0)
 
 
         delayedData = []
         index_after_split = []
         for split in unique_splits:
             # Get the indices of the current split
-            split_indices = np.all(self._split_by_array == split, axis=1)
-            order_by_split = self._order_by_array[split_indices]
+            split_indices = np.all(split_by_array == split, axis=1)
+            order_by_split = order_by_array[split_indices]
 
             X_sorted = X[split_indices, :]
             split_indexes = original_index[split_indices]
@@ -285,15 +300,13 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
 
         if self.include_order:
             # If include_order is True, append the order_by column to the output
-            order_col = np.array(self._order_by_array[index_after_split,:])
+            order_col = np.array(order_by_array[index_after_split,:])
             delayedData = np.concatenate((delayedData, order_col), axis=1)
             self.feature_names_out_.extend(self._order_by)
             
-
-
         if self.include_split:
             # If include_split is True, append the split_by column to the output
-            split_col = np.array(self._split_by_array[index_after_split,:])
+            split_col = np.array(split_by_array[index_after_split,:])
             delayedData = np.concatenate((delayedData, split_col), axis=1)
             self.feature_names_out_.extend(self._split_by)
         
@@ -303,9 +316,9 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator, auto_wrap_output_key
             
             output_dtypes = input_dtypes.repeat(self.window_size)
             if self.include_order:
-                output_dtypes = np.append(output_dtypes, self._order_by_dtype)
+                output_dtypes = np.append(output_dtypes, order_by_dtype)
             if self.include_split:
-                output_dtypes = np.append(output_dtypes, self._split_by_dtype)
+                output_dtypes = np.append(output_dtypes, split_by_dtype)
             output_dtypes = {name: dtype for name, dtype in zip(self.feature_names_out_, output_dtypes)}
             delayedData =  pd.DataFrame(delayedData, columns=self.feature_names_out_, index=index_after_split)
             
