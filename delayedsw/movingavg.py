@@ -41,7 +41,7 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
         "split_by": [str, int, list, None]
     }
 
-    def __init__(self, window=1, min_periods=None, center=False, 
+    def __init__(self, window=3, min_periods=None, center=False, 
                  columns_to_transform=None, order_by=None, split_by=None):
         self.window = window
         self.min_periods = min_periods
@@ -49,34 +49,28 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
         self.columns_to_transform = columns_to_transform
         self.order_by = order_by
         self.split_by = split_by
-        self._min_periods = min_periods if min_periods is not None else window
 
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y=None):
         """Fit the transformer to X."""
-        # Check if X is a DataFrame:
-        if (hasattr(X, 'columns') and 
-            hasattr(X, 'index') and 
-            hasattr(X, 'dtypes') and
-            hasattr(X, 'iloc')):
-            import pandas as pd
-            self._is_dataframe = True
-        else:
-            self._is_dataframe = False
-
+        # Preserve the original type of X
+        self._is_dataframe = isinstance(X, pd.DataFrame)
+        
+        # Prepare data for validation - handle mixed types carefully
         if self._is_dataframe:
-            X_val = X.copy()
+            X_for_validation = self._prepare_dataframe_for_validation(X)
         else:
-            X_val = X
-
-        if self._is_dataframe:
-            # Convert string columns to category dtype for processing
-            string_cols = [col for col in X.columns if pd.api.types.is_string_dtype(X[col])]
-            for col in string_cols:
-                X_val[col] = X_val[col].astype('category')
+            X_for_validation = X
         
         # Use validate_data to set feature_names_in_ and n_features_in_
-        X_validated = validate_data(self, X_val, reset=True)
+        # Allow NaN values and handle mixed types
+        X_validated = validate_data(
+            self, 
+            X_for_validation, 
+            reset=True,
+            ensure_all_finite='allow-nan',  # Allow NaN values
+            dtype=None  # Allow mixed types
+        )
         
         # Setup columns based on original input
         if self._is_dataframe:
@@ -86,6 +80,20 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
             
         self._validate_parameters(X_validated)
         return self
+
+    def _prepare_dataframe_for_validation(self, X):
+        """Prepare DataFrame for sklearn validation by handling mixed types."""
+        X_prep = X.copy()
+        
+        # Convert string/object columns to category for sklearn compatibility
+        for col in X_prep.columns:
+            if pd.api.types.is_object_dtype(X_prep[col]) or pd.api.types.is_string_dtype(X_prep[col]):
+                # Convert to category with numeric codes
+                X_prep[col] = pd.Categorical(X_prep[col]).codes
+                # Replace -1 (missing category) with NaN
+                X_prep[col] = X_prep[col].replace(-1, np.nan)
+        
+        return X_prep
 
     def _setup_dataframe_columns(self, X):
         """Setup column handling for pandas DataFrame."""
@@ -132,6 +140,9 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
             raise ValueError(f"Window size ({self.window}) cannot be larger than "
                            f"number of samples ({n_samples})")
         
+        # Set _min_periods here to avoid parameter mutation
+        self._min_periods = self.min_periods if self.min_periods is not None else self.window
+        
         if self._min_periods > self.window:
             raise ValueError(f"min_periods ({self._min_periods}) cannot be larger than "
                            f"window ({self.window})")
@@ -139,20 +150,21 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
     def transform(self, X, y=None):
         """Transform X using moving averages."""
         check_is_fitted(self)
-
+        
+        # Prepare data for validation if needed
         if self._is_dataframe:
-            X_val = X.copy()
+            X_for_validation = self._prepare_dataframe_for_validation(X)
         else:
-            X_val = X
-
-        if self._is_dataframe:
-            # Convert string columns to category dtype for processing
-            string_cols = [col for col in X.columns if pd.api.types.is_string_dtype(X[col])]
-            for col in string_cols:
-                X_val[col] = X_val[col].astype('category')
+            X_for_validation = X
         
         # Use validate_data to ensure sklearn compatibility
-        X_validated = validate_data(self, X_val, reset=False)
+        X_validated = validate_data(
+            self, 
+            X_for_validation, 
+            reset=False,
+            ensure_all_finite='allow-nan',  # Allow NaN values
+            dtype=None  # Allow mixed types
+        )
         
         if self._is_dataframe:
             return self._transform_dataframe(X)
@@ -184,7 +196,23 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
                 raise ValueError(f"Split columns not found: {missing_split}")
                 
             # Group by split_by columns and apply transformation
-            result = result.groupby(self.split_by, group_keys=False, observed=False)[result.columns].apply(self._apply_moving_average_df)
+            # Store original grouping columns to preserve them
+            split_cols = [self.split_by] if isinstance(self.split_by, str) else self.split_by
+            
+            # Create a copy to work with
+            grouped = result.groupby(self.split_by, group_keys=False)
+            
+            # Apply transformation with include_groups=False and then restore grouping columns
+            try:
+                # For newer pandas versions
+                transformed_data = grouped.apply(self._apply_moving_average_df, include_groups=False)
+                
+                # Restore the grouping columns by merging back
+                result = result[split_cols].join(transformed_data)
+                
+            except TypeError:
+                # Fallback for older pandas versions 
+                result = grouped.apply(self._apply_moving_average_df)
             
         return result
 
@@ -202,17 +230,22 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
         # Apply moving average only to specified columns
         for col in self._transform_cols:
             if col in df.columns:
+                # Use apply with a custom function that propagates NaN
                 df[col] = df[col].rolling(
                     window=self.window,
                     min_periods=self._min_periods,
                     center=self.center
-                ).mean()
+                ).apply(lambda x: np.nan if np.any(np.isnan(x)) else np.mean(x), raw=True)
                 
         return df
 
     def _transform_array(self, X):
         """Transform numpy array."""
-        result = X.copy().astype(float)
+        result = X.copy()
+        
+        # Convert entire result to float if any transform columns are involved
+        if self._transform_indices:
+            result = result.astype(float)
         
         if self.split_by is None:
             # No grouping - apply to entire array
@@ -251,7 +284,13 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
     def _moving_average_1d(self, x):
         """Compute moving average for 1D array."""
         n = len(x)
-        result = np.full(n, np.nan)
+        result = np.full(n, np.nan, dtype=float)
+        
+        # Convert to float if possible, otherwise skip
+        try:
+            x_float = x.astype(float)
+        except (ValueError, TypeError):
+            return result  # Return NaN array if can't convert to float
         
         if self.center:
             # Centered window
@@ -259,17 +298,23 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
             for i in range(n):
                 start = max(0, i - half_window)
                 end = min(n, i + half_window + 1)
-                window_data = x[start:end]
+                window_data = x_float[start:end]
                 
-                if len(window_data) >= self._min_periods:
+                # If any NaN values in window, result is NaN
+                if np.any(np.isnan(window_data)):
+                    result[i] = np.nan
+                elif len(window_data) >= self._min_periods:
                     result[i] = np.mean(window_data)
         else:
             # Trailing window (default)
             for i in range(n):
                 start = max(0, i - self.window + 1)
-                window_data = x[start:i + 1]
+                window_data = x_float[start:i + 1]
                 
-                if len(window_data) >= self._min_periods:
+                # If any NaN values in window, result is NaN
+                if np.any(np.isnan(window_data)):
+                    result[i] = np.nan
+                elif len(window_data) >= self._min_periods:
                     result[i] = np.mean(window_data)
                     
         return result
@@ -282,8 +327,3 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
             return np.array(self._column_names)
         else:
             return np.array([f"feature_{i}" for i in range(len(self._column_names))])
-
-    def __sklearn_tags__(self):
-        tags = super().__sklearn_tags__()
-        tags.input_tags.sparse = False
-        return tags
