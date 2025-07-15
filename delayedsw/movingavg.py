@@ -196,10 +196,6 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
                 raise ValueError(f"Split columns not found: {missing_split}")
                 
             # Group by split_by columns and apply transformation
-            # Store original grouping columns to preserve them
-            split_cols = [self.split_by] if isinstance(self.split_by, str) else self.split_by
-            
-            # Create a copy to work with
             grouped = result.groupby(self.split_by, group_keys=False)
             
             # Apply transformation with include_groups=False and then restore grouping columns

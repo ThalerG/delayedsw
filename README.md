@@ -36,24 +36,21 @@ print(X_transformed)
 
 ### Core Functionality
 - **Delayed Space Sliding Window**: Creates lagged features with configurable window size and delay spacing
-- **Multi-feature Support**: Handles multiple time series columns simultaneously
-- **Selective Column Transformation**: Transform only specific columns while preserving others
+- **Multi-feature Support**: Handles multiple time series columns simultaneously  
+- **Selective Column Transformation**: Transform only specific columns while preserving all original features
 - **Pandas Integration**: Full support for pandas DataFrames with column name preservation
 - **Ordering**: Sort data by specified columns before applying transformations
 - **Data Splitting**: Process data in separate groups based on splitting columns
-- **NaN Handling**: Configurable dropping of NaN values
+- **NaN Preservation**: NaN values are preserved and properly propagated through transformations
 - **Scikit-learn Compatibility**: Full compatibility with sklearn's transformer API
 
 ### Parameters
 
 - `window_size` (int, default=1): Size of the sliding window
 - `delay_space` (int, default=1): Space between delayed samples
-- `columns_to_transform` (list, optional): Specific columns to transform (indices or names)
+- `columns_to_transform` (list, optional): Specific columns to transform (indices or names). All original features are preserved regardless of this setting.
 - `order_by` (int/str/list, optional): Column(s) to order by before transformation
 - `split_by` (int/str/list, optional): Column(s) to split data into separate groups
-- `drop_nan` (bool, default=True): Whether to drop NaN values from output
-- `include_order` (bool, default=False): Whether to include order columns in output
-- `include_split` (bool, default=False): Whether to include split columns in output
 
 ## Examples
 
@@ -86,7 +83,7 @@ X = np.array([
 
 transformer = DelayedSlidingWindow(window_size=2, delay_space=2)
 X_transformed = transformer.fit_transform(X)
-print(X_transformed.shape)  # (3, 6) - 2 windows × 3 features
+print(X_transformed.shape)  # (5, 6) - All 3 original features + 3 lagged features (lag_2 for each)
 ```
 
 ### Pandas DataFrame Support
@@ -132,9 +129,7 @@ transformer = DelayedSlidingWindow(
     delay_space=2,
     columns_to_transform=['value'],
     order_by='timestamp',    # Sort by timestamp within each group
-    split_by='group',        # Process each group separately
-    include_order=True,      # Include timestamp in output
-    include_split=True       # Include group in output
+    split_by='group'         # Process each group separately
 )
 result = transformer.fit_transform(df)
 ```
@@ -161,14 +156,18 @@ The delayed space sliding window transformer creates lagged features by:
 
 1. **Data Splitting**: If `split_by` is specified, data is split into separate groups
 2. **Ordering**: Within each group, data is sorted by `order_by` columns if specified
-3. **Window Creation**: For each time point, creates a window of `window_size` previous values
-4. **Delay Application**: Spaces the lagged values by `delay_space` time steps
-5. **Feature Generation**: Generates new features with descriptive names (e.g., `feature_0`, `feature_2`, etc.)
+3. **Window Creation**: For each specified column, creates lagged values spaced by `delay_space` time steps
+4. **NaN Handling**: Uses NaN for lagged values that are not available (e.g., early time points)
+5. **Feature Generation**: Generates descriptive names for lagged features (e.g., `feature_0_2` for feature_0 lagged by 2 time steps)
+
+**Key Behavior:**
+- **Same number of rows**: Output has the same number of rows as input
+- **NaN for unavailable lags**: Early rows contain NaN where lagged values aren't available
 
 For example, with `window_size=2` and `delay_space=2`:
 - Original: `[1, 2, 3, 4, 5]`
-- Transformed: `[[3, 1], [4, 2], [5, 3]]`
-- Features represent: `[current, lag_2]`
+- Transformed: `[[1, NaN], [2, NaN], [3, 1], [4, 2], [5, 3]]`
+- Features represent: `[original, lag_2]`
 
 ## Scikit-learn Compatibility
 
@@ -185,8 +184,7 @@ For example, with `window_size=2` and `delay_space=2`:
 ```python
 class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
     def __init__(self, window_size=1, delay_space=1, columns_to_transform=None, 
-                 order_by=None, split_by=None, drop_nan=True, 
-                 include_order=False, include_split=False)
+                 order_by=None, split_by=None)
     
     def fit(self, X, y=None)
     def transform(self, X, y=None)
@@ -198,12 +196,9 @@ class DelayedSlidingWindow(BaseEstimator, TransformerMixin):
 
 - **window_size** (int, default=1): Size of the sliding window. Must be >= 1.
 - **delay_space** (int, default=1): Space between delayed samples. Must be >= 1.
-- **columns_to_transform** (list, optional): List of column names or indices to transform. If None, all columns are transformed.
+- **columns_to_transform** (list, optional): List of column names or indices to transform. If None, all columns are transformed. All original features are always preserved in the output.
 - **order_by** (str, int, or list, optional): Column(s) to sort by before transformation.
 - **split_by** (str, int, or list, optional): Column(s) to split data into separate groups.
-- **drop_nan** (bool, default=True): Whether to drop rows with NaN values.
-- **include_order** (bool, default=False): Whether to include order columns in output.
-- **include_split** (bool, default=False): Whether to include split columns in output.
 
 ## Testing
 
