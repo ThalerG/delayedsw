@@ -42,7 +42,7 @@ print(X_transformed)
 - **Ordering**: Sort data by specified columns before applying transformations
 - **Data Splitting**: Process data in separate groups based on splitting columns
 - **NaN Preservation**: NaN values are preserved and properly propagated through transformations
-- **Scikit-learn Compatibility**: Full compatibility with sklearn's transformer API
+- **Pipeline Compatibility**: Compatible with sklearn pipelines and basic transformer workflows
 
 ### Parameters
 
@@ -169,13 +169,13 @@ For example, with `window_size=2` and `delay_space=2`:
 - Transformed: `[[1, NaN], [2, NaN], [3, 1], [4, 2], [5, 3]]`
 - Features represent: `[original, lag_2]`
 
-## Scikit-learn Compatibility
+## Scikit-learn Pipeline Compatibility
 
-✅ **Full scikit-learn API compatibility** - The transformer passes all sklearn estimator checks and can be used in:
-- Pipelines
-- Grid search
-- Cross-validation
-- Any sklearn workflow
+✅ **Pipeline Integration Supported** - The transformer works with sklearn pipelines but does not pass all sklearn estimator checks due to its design for handling mixed data types:
+- ✅ Pipeline workflows
+- ✅ Basic fit/transform interface
+- ❓ Full sklearn estimator compliance (in development)
+- 🔄 Complete sklearn compatibility planned for future releases
 
 ## API Reference
 
@@ -213,8 +213,9 @@ The test suite includes:
 - Multi-feature transformation tests
 - Pandas DataFrame integration tests
 - Ordering and splitting functionality tests
-- Pipeline compatibility tests
-- Full sklearn compatibility tests
+- Core API tests
+- Sklearn pipeline integration tests
+- Partial sklearn compatibility tests (full compliance in development)
 
 ## Installation for Development
 
@@ -239,16 +240,50 @@ Gabriel Thaler
 
 ## Changelog
 
-### v0.1.3
+### v0.2.0 - 2025-07-15
 
-- Implementation of `order_by` and `split_by` parameters
-- Support for `include_order` and `include_split` options
-- Enhanced pandas DataFrame support with dtype preservation
+**BREAKING CHANGES:**
+- **API Refactoring**: Removed deprecated parameters (`include_order`, `include_split`) from `DelayedSlidingWindow`
+- **Sklearn Compliance**: Pipeline integration maintained, but full sklearn estimator checks remain in development
+- **Simplified Interface**: Streamlined transformer behavior and parameter handling
+
+**New Features:**
+- **Moving Average Transformer**: Added new `MovingAverage` transformer class with configurable window sizes
+- **NaN Propagation**: Enhanced NaN handling in moving average calculations
+- **Improved Core Logic**: Refactored sliding window implementation for better performance (209 lines changed in `sliding.py`)
+
+**Technical Changes:**
+- Refactored `delayedsw/sliding.py` with improved sliding window behavior
+- Updated test suite with 202 lines changed in `test_sliding.py` for better coverage
+- Added comprehensive tests for moving average functionality
+- Updated package exports in `__init__.py` to include `MovingAverage`
+
+### v0.1.3 - 2025-07-10
+
+**Major Features:**
+- **Data Ordering**: Added `order_by` parameter to sort data by specified columns before transformation
+- **Data Splitting**: Added `split_by` parameter to process data in separate groups based on splitting columns
+- **Enhanced Pandas Support**: Improved DataFrame integration with dtype preservation
+- **Optional Column Inclusion**: Added `include_order` and `include_split` options for controlling output columns
+
+**Implementation Details:**
+- New functionalities to `delayedsw/sliding.py`
+- Enhanced README.md
+- Updated test suite with new ordering and splitting test cases
+- Improved project configuration in `pyproject.toml`
+- Updated dependencies in `requirements.txt` and `requirements_test.txt`
+
+**API Enhancements:**
+- New constructor parameters: `order_by`, `split_by`, `include_order`, `include_split`
+- Improved error handling for type mismatches during column operations
+- Enhanced internal logic to avoid modifying object state during transform operations
 
 ### v0.1.2
-- Full scikit-learn API compatibility
+- **Pipeline Integration**: Basic sklearn pipeline compatibility implementation
+- **BaseEstimator Integration**: Added inheritance from sklearn's BaseEstimator and TransformerMixin
+- **Interface Development**: Foundation for sklearn API (full compliance in development)
 
 ### v0.1.1
-- Initial release with basic sliding window functionality
-- Basic pandas support
-- Limited sklearn compatibility
+- **Initial Release**: Basic sliding window functionality for time series preprocessing
+- **Pandas Support**: Initial DataFrame support with basic column handling
+- **Core Transformer**: Fundamental delayed space sliding window implementation

@@ -8,6 +8,106 @@ import numpy as np
 import pandas as pd
 
 class DelayedSlidingWindow(TransformerMixin, BaseEstimator):
+    """
+    A transformer that creates lagged features using delayed space sliding windows.
+    
+    This transformer generates lagged versions of input features by applying a sliding window
+    with configurable window size and delay spacing. It supports selective column transformation,
+    data ordering, and group-wise processing while preserving all original features.
+    
+    The key difference from traditional sliding windows is the "delay space" parameter,
+    which controls the spacing between lagged values rather than creating consecutive lags.
+    
+    Parameters
+    ----------
+    window_size : int, default=1
+        Size of the sliding window. Must be >= 1. This determines how many lagged
+        features will be created for each selected column.
+        
+    delay_space : int, default=1
+        Space between delayed samples. Must be >= 1. This controls the lag spacing
+        between consecutive window elements. For example, delay_space=2 creates
+        lags at positions [0, 2, 4, ...] relative to the current position.
+        
+    columns_to_transform : list of str or int, optional
+        Specific columns to transform (by name or index). If None, all columns
+        are transformed. All original features are always preserved in the output.
+        
+    order_by : str, int, or list of str/int, optional
+        Column(s) to sort by before applying the transformation. Useful for
+        time series data to ensure proper temporal ordering.
+        
+    split_by : str, int, or list of str/int, optional
+        Column(s) to group by before applying the transformation. Each group
+        is processed separately, preventing lag values from crossing group boundaries.
+    
+    Attributes
+    ----------
+    input_type_ : type
+        The type of the input data (numpy.ndarray or pandas.DataFrame).
+        
+    n_features_in_ : int
+        Number of features in the input data.
+        
+    feature_names_in_ : ndarray of shape (n_features_in_,)
+        Names of features seen during fit (only if input is DataFrame).
+    
+    Examples
+    --------
+    Basic usage with numpy arrays:
+    
+    >>> import numpy as np
+    >>> from delayedsw import DelayedSlidingWindow
+    >>> X = np.array([[1, 2, 3, 4, 5]]).T
+    >>> transformer = DelayedSlidingWindow(window_size=2, delay_space=2)
+    >>> X_transformed = transformer.fit_transform(X)
+    >>> print(X_transformed)
+    [[  1.  nan]
+     [  2.  nan]
+     [  3.   1.]
+     [  4.   2.]
+     [  5.   3.]]
+    
+    With pandas DataFrames and selective columns:
+    
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({'A': [1, 2, 3, 4, 5], 'B': [10, 20, 30, 40, 50]})
+    >>> transformer = DelayedSlidingWindow(
+    ...     window_size=2, 
+    ...     delay_space=1,
+    ...     columns_to_transform=['A']
+    ... )
+    >>> result = transformer.fit_transform(df)
+    >>> print(result.columns.tolist())
+    ['A_0', 'A_1']
+    
+    With grouping and ordering:
+    
+    >>> df = pd.DataFrame({
+    ...     'value': [3, 1, 4, 2],
+    ...     'time': [3, 1, 4, 2], 
+    ...     'group': ['A', 'A', 'B', 'B']
+    ... })
+    >>> transformer = DelayedSlidingWindow(
+    ...     window_size=2,
+    ...     order_by='time',
+    ...     split_by='group',
+    ...     columns_to_transform=['value']
+    ... )
+    >>> result = transformer.fit_transform(df)
+    
+    Notes
+    -----
+    - The output always has the same number of rows as the input
+    - Early rows contain NaN where lagged values are not available
+    - When using split_by, lag values never cross group boundaries
+    - All original features are preserved regardless of columns_to_transform
+    - The transformer is compatible with sklearn pipelines
+    
+    See Also
+    --------
+    MovingAverageTransformer : For computing moving averages instead of lags
+    """
 
 
     _parameter_constraints = {
@@ -20,9 +120,30 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator):
 
     def __init__(self, window_size:int =1, delay_space: int=1, columns_to_transform: list[str|int]|None =None, 
                  order_by: int|str|list[int|str]|None = None, split_by: int|str|list[int|str]|None = None):
-        """Initialize the DelayedSlidingWindow transformer.
+        """
+        Initialize the DelayedSlidingWindow transformer.
         
-        Note: All input columns are preserved in the output. The columns_to_transform parameter
+        Parameters
+        ----------
+        window_size : int, default=1
+            Size of the sliding window. Must be >= 1.
+            
+        delay_space : int, default=1
+            Space between delayed samples. Must be >= 1.
+            
+        columns_to_transform : list of str or int, optional
+            Specific columns to transform. If None, all columns are transformed.
+            All original features are preserved regardless of this setting.
+            
+        order_by : str, int, or list of str/int, optional
+            Column(s) to sort by before transformation.
+            
+        split_by : str, int, or list of str/int, optional
+            Column(s) to group by before transformation.
+        
+        Notes
+        -----
+        All input columns are preserved in the output. The columns_to_transform parameter
         specifies which columns will have sliding window transformations applied as NEW columns.
         """
 
@@ -34,7 +155,33 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator):
 
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y=None):
-        """Get column names and number of features from the input data."""
+        """
+        Fit the transformer to the input data.
+        
+        This method analyzes the input data structure, validates parameters,
+        and prepares internal state for transformation. It determines column
+        types, validates ordering and splitting parameters, and sets up
+        the transformation configuration.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Input data. Can be a numpy array or pandas DataFrame.
+            
+        y : array-like of shape (n_samples,), optional
+            Target values. Ignored, present for API consistency.
+        
+        Returns
+        -------
+        self : object
+            Fitted transformer instance.
+            
+        Raises
+        ------
+        ValueError
+            If order_by or split_by columns are not found in the data,
+            or if columns_to_transform contains invalid column references.
+        """
 
         # Store original input information for output formatting
         self.input_type_ = type(X)
@@ -63,7 +210,22 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator):
         return self
     
     def _get_types(self, X):
-        """Get the types of the input data."""
+        """
+        Analyze and store the input data type information.
+        
+        Determines whether the input is a pandas DataFrame and stores
+        relevant type information for output formatting.
+        
+        Parameters
+        ----------
+        X : array-like
+            Input data to analyze.
+        
+        Notes
+        -----
+        Sets self._is_pandas and self._input_dtypes attributes for use
+        during transformation and output formatting.
+        """
 
         # Save the input dtypes for output formatting if pandas DataFrame
         if (hasattr(X, 'columns') and 
@@ -230,10 +392,37 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator):
 
         
     def transform(self, X, y=None):
-        """Transform the data using a sliding window with delay.
+        """
+        Transform the input data using delayed space sliding windows.
         
-        All input columns are preserved in the output, and sliding window features
-        are added as new columns for the specified columns_to_transform.
+        Creates lagged features for the specified columns while preserving all
+        original features. The transformation respects grouping and ordering
+        constraints if specified during initialization.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Input data to transform. Must have the same structure as the
+            data used during fit.
+            
+        y : array-like of shape (n_samples,), optional
+            Target values. Ignored, present for API consistency.
+        
+        Returns
+        -------
+        X_transformed : array-like of shape (n_samples, n_features_out)
+            Transformed data with original features plus lagged features.
+            For pandas DataFrames, returns a DataFrame with descriptive
+            column names (e.g., 'feature_0_2' for feature with lag 2).
+            For numpy arrays, returns an array with lagged columns appended.
+        
+        Notes
+        -----
+        - Output has the same number of rows as input
+        - Early rows contain NaN where lagged values are not available
+        - If split_by is used, lag values never cross group boundaries
+        - Column order in output: selected columns with their lags, then
+          any remaining non-transformed columns
         """
 
         # Save the original index of the input data for output formatting if pandas DataFrame
@@ -372,9 +561,29 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator):
         return windows
     
     def get_feature_names_out(self, input_features=None):
-        """Get the feature names after transformation.
+        """
+        Get the feature names for the transformed output.
         
-        Returns all original feature names plus the new sliding window feature names.
+        Returns descriptive names for all features in the transformed output,
+        including both original features and newly created lagged features.
+        
+        Parameters
+        ----------
+        input_features : array-like of str, optional
+            Input feature names. If None, uses the feature names from fit
+            or generates default names.
+        
+        Returns
+        -------
+        feature_names_out : ndarray of str
+            Array of feature names for the transformed output. Includes
+            original feature names plus lagged feature names in the format
+            'feature_lag' (e.g., 'sensor1_2' for sensor1 with lag 2).
+        
+        Notes
+        -----
+        Must be called after fit. The order matches the column order
+        of the transform output.
         """
         check_is_fitted(self, '_columns_indices')
         

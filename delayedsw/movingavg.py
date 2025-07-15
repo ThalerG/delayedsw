@@ -43,6 +43,33 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
 
     def __init__(self, window=3, min_periods=None, center=False, 
                  columns_to_transform=None, order_by=None, split_by=None):
+        """
+        Initialize the MovingAverageTransformer.
+        
+        Parameters
+        ----------
+        window : int, default=3
+            Size of the moving window. Must be >= 1.
+            
+        min_periods : int, optional
+            Minimum number of observations in window required to have a value.
+            If None, defaults to window size. Must be >= 1 if specified.
+            
+        center : bool, default=False
+            Whether to center the window around the current observation.
+            If True, the window is centered; if False, the window includes
+            the current observation and (window-1) preceding observations.
+            
+        columns_to_transform : list of str or int, optional
+            List of column names/indices to transform. If None, transforms
+            all numeric columns. Non-numeric columns are always preserved.
+            
+        order_by : str, int, or list of str/int, optional
+            Column(s) to sort by before applying transformation.
+            
+        split_by : str, int, or list of str/int, optional
+            Column(s) to group by before applying transformation.
+        """
         self.window = window
         self.min_periods = min_periods
         self.center = center
@@ -52,7 +79,32 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
 
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y=None):
-        """Fit the transformer to X."""
+        """
+        Fit the transformer to the input data.
+        
+        Analyzes the input data structure, validates parameters, and prepares
+        internal state for transformation. Determines which columns are numeric
+        and can be transformed, and validates grouping/ordering parameters.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Input data. Can be a numpy array or pandas DataFrame.
+            
+        y : array-like of shape (n_samples,), optional
+            Target values. Ignored, present for API consistency.
+        
+        Returns
+        -------
+        self : object
+            Fitted transformer instance.
+            
+        Raises
+        ------
+        ValueError
+            If order_by or split_by columns are not found in the data,
+            or if columns_to_transform contains invalid column references.
+        """
         # Preserve the original type of X
         self._is_dataframe = isinstance(X, pd.DataFrame)
         
@@ -148,7 +200,38 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
                            f"window ({self.window})")
 
     def transform(self, X, y=None):
-        """Transform X using moving averages."""
+        """
+        Transform the input data using moving averages.
+        
+        Applies moving average calculations to the specified numeric columns
+        while preserving all other columns unchanged. Respects grouping and
+        ordering constraints if specified during initialization.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Input data to transform. Must have the same structure as the
+            data used during fit.
+            
+        y : array-like of shape (n_samples,), optional
+            Target values. Ignored, present for API consistency.
+        
+        Returns
+        -------
+        X_transformed : array-like of shape (n_samples, n_features)
+            Transformed data with moving averages applied to specified columns.
+            Non-numeric and non-selected columns are preserved unchanged.
+            For pandas DataFrames, returns a DataFrame with same column names.
+            For numpy arrays, returns an array with same structure.
+        
+        Notes
+        -----
+        - Output has the same number of rows and columns as input
+        - NaN values are properly propagated through the moving average calculation
+        - If center=True, the window is centered around each observation
+        - If split_by is used, moving averages never cross group boundaries
+        - Early/late observations may have NaN if insufficient data for the window
+        """
         check_is_fitted(self)
         
         # Prepare data for validation if needed
@@ -316,7 +399,29 @@ class MovingAverageTransformer(TransformerMixin, BaseEstimator):
         return result
 
     def get_feature_names_out(self, input_features=None):
-        """Get output feature names for transformation."""
+        """
+        Get the feature names for the transformed output.
+        
+        Returns the same feature names as the input since moving averages
+        are applied in-place to the selected columns without creating new columns.
+        
+        Parameters
+        ----------
+        input_features : array-like of str, optional
+            Input feature names. If None, uses the feature names from fit
+            or generates default names for numpy arrays.
+        
+        Returns
+        -------
+        feature_names_out : ndarray of str
+            Array of feature names for the transformed output. Same as input
+            feature names since the transformation preserves column structure.
+        
+        Notes
+        -----
+        Must be called after fit. Unlike DelayedSlidingWindow, this transformer
+        does not create new columns but modifies existing ones in-place.
+        """
         check_is_fitted(self)
         
         if self._is_dataframe:
