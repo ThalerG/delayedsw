@@ -511,7 +511,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator):
         # Now we need to preserve the original columns and add the new sliding window features
         if self._is_pandas:
             # Get the original data for the final indices
-            original_data_subset = X_original.loc[final_index]
+            original_data_subset = X_original.iloc[final_index]
             
             # Create DataFrame with sliding features
             sliding_features_df = pd.DataFrame(final_delayedData, columns=self.feature_names_out_, index=final_index)
