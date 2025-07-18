@@ -442,7 +442,7 @@ class DelayedSlidingWindow(TransformerMixin, BaseEstimator):
         else:
             X_for_validation = X
 
-        X = validate_data(self, X_for_validation, reset=False)
+        X = validate_data(self, X_for_validation, reset=False, ensure_all_finite='allow-nan')
 
         if self.split_by is None:
             split_by_array = np.full((X.shape[0], 1), ' ', dtype=str)  # Array for no split
